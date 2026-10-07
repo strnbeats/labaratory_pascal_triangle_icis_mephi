@@ -1,27 +1,45 @@
 #include <stdio.h>
 #include <ctype.h>
+#include <limits.h>
 
 #define MAX_POWER 66
 
-int read_number(char expression[], int *position)
+int read_number(char expression[], int *position, long long *number)
 {
-    int number = 0;
+    long long result = 0;
 
     while (isdigit(expression[*position]))
     {
-        number = number * 10 + (expression[*position] - '0');
+        int digit = expression[*position] - '0';
+
+        if (result > (LLONG_MAX - digit) / 10)
+        {
+            return 0;
+        }
+
+        result = result * 10 + digit;
         (*position)++;
     }
 
-    return number;
+    *number = result;
+
+    return 1;
 }
 
-int read_term(char expression[], int *position,
-              long long *number, char *letter)
+int read_term(
+    char expression[],
+    int *position,
+    long long *number,
+    char *letter
+)
 {
     if (isdigit(expression[*position]))
     {
-        *number = read_number(expression, position);
+        if (!read_number(expression, position, number))
+        {
+            return 0;
+        }
+
         return 1;
     }
 
@@ -29,6 +47,7 @@ int read_term(char expression[], int *position,
     {
         *letter = expression[*position];
         (*position)++;
+
         return 2;
     }
 
@@ -38,6 +57,8 @@ int read_term(char expression[], int *position,
 int check_expression(char expression[], int *power)
 {
     int position = 0;
+    long long number;
+    long long power_number_value;
 
     if (expression[position] != '(')
     {
@@ -49,7 +70,11 @@ int check_expression(char expression[], int *power)
 
     if (isdigit(expression[position]))
     {
-        read_number(expression, &position);
+        if (!read_number(expression, &position, &number))
+        {
+            printf("Ошибка: число слишком большое\n");
+            return 0;
+        }
     }
     else if (isalpha(expression[position]))
     {
@@ -63,7 +88,7 @@ int check_expression(char expression[], int *power)
 
     if (expression[position] != '+')
     {
-        printf("Ошибка: первый член должен состоять из одного числа или одной буквы\n");
+        printf("Ошибка: между членами должен быть '+'\n");
         return 0;
     }
 
@@ -71,7 +96,11 @@ int check_expression(char expression[], int *power)
 
     if (isdigit(expression[position]))
     {
-        read_number(expression, &position);
+        if (!read_number(expression, &position, &number))
+        {
+            printf("Ошибка: число слишком большое\n");
+            return 0;
+        }
     }
     else if (isalpha(expression[position]))
     {
@@ -85,7 +114,7 @@ int check_expression(char expression[], int *power)
 
     if (expression[position] != ')')
     {
-        printf("Ошибка: второй член должен состоять из одного числа или одной буквы\n");
+        printf("Ошибка: после второго члена должна быть ')'\n");
         return 0;
     }
 
@@ -105,18 +134,112 @@ int check_expression(char expression[], int *power)
         return 0;
     }
 
-    *power = read_number(expression, &position);
+    if (!read_number(expression, &position, &power_number_value))
+    {
+        printf("Ошибка: степень слишком большая\n");
+        return 0;
+    }
 
-    if (*power > MAX_POWER)
+    if (power_number_value > MAX_POWER)
     {
         printf("Ошибка: степень не должна быть больше %d\n", MAX_POWER);
         return 0;
     }
 
+    *power = (int)power_number_value;
+
     if (expression[position] != '\0')
     {
         printf("Ошибка: после степени не должно быть других символов\n");
         return 0;
+    }
+
+    return 1;
+}
+
+int safe_multiply(
+    long long first,
+    long long second,
+    long long *result
+)
+{
+    if (first == 0 || second == 0)
+    {
+        *result = 0;
+        return 1;
+    }
+
+    if (first > LLONG_MAX / second)
+    {
+        return 0;
+    }
+
+    *result = first * second;
+
+    return 1;
+}
+
+int power_number(
+    long long number,
+    int power,
+    long long *result
+)
+{
+    long long value = 1;
+    int position;
+
+    for (position = 0; position < power; position++)
+    {
+        if (!safe_multiply(value, number, &value))
+        {
+            return 0;
+        }
+    }
+
+    *result = value;
+
+    return 1;
+}
+
+int build_pascal_row(int power, long long row[])
+{
+    long long previous[67];
+    long long current[67];
+
+    int position;
+    int line;
+
+    for (line = 0; line <= power; line++)
+    {
+        for (position = 0; position <= line; position++)
+        {
+            if (position == 0 || position == line)
+            {
+                current[position] = 1;
+            }
+            else
+            {
+                if (previous[position - 1] >
+                    LLONG_MAX - previous[position])
+                {
+                    printf("Ошибка: переполнение при построении треугольника Паскаля\n");
+                    return 0;
+                }
+
+                current[position] =
+                    previous[position - 1] + previous[position];
+            }
+        }
+
+        for (position = 0; position <= line; position++)
+        {
+            previous[position] = current[position];
+        }
+    }
+
+    for (position = 0; position <= power; position++)
+    {
+        row[position] = current[position];
     }
 
     return 1;
@@ -133,76 +256,21 @@ int count_digits(long long number)
 
     while (number > 0)
     {
-        number = number / 10;
+        number /= 10;
         digits++;
     }
 
     return digits;
 }
 
-int main(void)
+void print_pascal_triangle(int power)
 {
-    int power, row, position;
-    char expression[100];
-
-    long long first_number = 0;
-    long long second_number = 0;
-
-    char first_letter = '\0';
-    char second_letter = '\0';
-
-    int first_type;
-    int second_type;
-
-    printf("Введите выражение: ");
-    scanf("%99s", expression);
-
-    if (!check_expression(expression, &power))
-    {
-        return 0;
-    }
-
-    int term_position = 1;
-
-    first_type = read_term(
-        expression,
-        &term_position,
-        &first_number,
-        &first_letter
-    );
-
-    term_position++;
-
-    second_type = read_term(
-        expression,
-        &term_position,
-        &second_number,
-        &second_letter
-    );
-
-    printf("Выражение прошло проверку\n");
-    printf("Степень: %d\n", power);
-
-    if (first_type == 1)
-    {
-        printf("Первый член: %lld\n", first_number);
-    }
-    else
-    {
-        printf("Первый член: %c\n", first_letter);
-    }
-
-    if (second_type == 1)
-    {
-        printf("Второй член: %lld\n", second_number);
-    }
-    else
-    {
-        printf("Второй член: %c\n", second_letter);
-    }
-
     long long previous[67];
     long long current[67];
+
+    int row;
+    int position;
+    int max_digits = 0;
 
     for (row = 0; row <= power; row++)
     {
@@ -224,8 +292,6 @@ int main(void)
             previous[position] = current[position];
         }
     }
-
-    int max_digits = 0;
 
     for (position = 0; position <= power; position++)
     {
@@ -280,6 +346,282 @@ int main(void)
             previous[position] = current[position];
         }
     }
+}
+
+int calculate_term(
+    long long coefficient,
+    int first_type,
+    int second_type,
+    long long first_number,
+    long long second_number,
+    int first_power,
+    int second_power,
+    long long *result
+)
+{
+    long long value = coefficient;
+    long long power_value;
+
+    if (first_type == 1 && first_power > 0)
+    {
+        if (!power_number(first_number, first_power, &power_value))
+        {
+            return 0;
+        }
+
+        if (!safe_multiply(value, power_value, &value))
+        {
+            return 0;
+        }
+    }
+
+    if (second_type == 1 && second_power > 0)
+    {
+        if (!power_number(second_number, second_power, &power_value))
+        {
+            return 0;
+        }
+
+        if (!safe_multiply(value, power_value, &value))
+        {
+            return 0;
+        }
+    }
+
+    *result = value;
+
+    return 1;
+}
+
+int check_expansion(
+    int power,
+    long long coefficients[],
+    int first_type,
+    int second_type,
+    long long first_number,
+    long long second_number
+)
+{
+    int position;
+    long long result;
+
+    for (position = 0; position <= power; position++)
+    {
+        int first_power = power - position;
+        int second_power = position;
+
+        if (!calculate_term(
+                coefficients[position],
+                first_type,
+                second_type,
+                first_number,
+                second_number,
+                first_power,
+                second_power,
+                &result))
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+void print_expansion(
+    int power,
+    long long coefficients[],
+    int first_type,
+    int second_type,
+    long long first_number,
+    long long second_number,
+    char first_letter,
+    char second_letter
+)
+{
+    int position;
+
+    printf("Разложение: ");
+
+    for (position = 0; position <= power; position++)
+    {
+        long long coefficient = coefficients[position];
+        int first_power = power - position;
+        int second_power = position;
+
+        long long variable_coefficient = coefficient;
+        long long power_value;
+
+        if (first_type == 1 && first_power > 0)
+        {
+            power_number(first_number, first_power, &power_value);
+
+            safe_multiply(
+                variable_coefficient,
+                power_value,
+                &variable_coefficient
+            );
+        }
+
+        if (second_type == 1 && second_power > 0)
+        {
+            power_number(second_number, second_power, &power_value);
+
+            safe_multiply(
+                variable_coefficient,
+                power_value,
+                &variable_coefficient
+            );
+        }
+
+        if (first_type == 1 && second_type == 1)
+        {
+            printf("%lld", variable_coefficient);
+        }
+        else
+        {
+            if (variable_coefficient != 1)
+            {
+                printf("%lld", variable_coefficient);
+            }
+
+            if (first_type == 2 && first_power > 0)
+            {
+                printf("%c", first_letter);
+
+                if (first_power > 1)
+                {
+                    printf("^%d", first_power);
+                }
+            }
+
+            if (second_type == 2 && second_power > 0)
+            {
+                printf("%c", second_letter);
+
+                if (second_power > 1)
+                {
+                    printf("^%d", second_power);
+                }
+            }
+        }
+
+        if (position < power)
+        {
+            printf(" + ");
+        }
+    }
+
+    printf("\n");
+}
+
+int main(void)
+{
+    int power;
+    int term_position;
+    int first_type;
+    int second_type;
+    int position;
+    int input_position;
+
+    char expression[100];
+
+    long long first_number = 0;
+    long long second_number = 0;
+
+    char first_letter = '\0';
+    char second_letter = '\0';
+
+    long long coefficients[67];
+
+    printf("Введите выражение: ");
+
+    if (fgets(expression, sizeof(expression), stdin) == NULL)
+    {
+        printf("Ошибка: не удалось прочитать выражение\n");
+        return 0;
+    }
+
+    input_position = 0;
+
+    while (expression[input_position] != '\0')
+    {
+        if (expression[input_position] == '\n')
+        {
+            expression[input_position] = '\0';
+            break;
+        }
+
+        input_position++;
+    }
+
+    if (!check_expression(expression, &power))
+    {
+        return 0;
+    }
+
+    term_position = 1;
+
+    first_type = read_term(
+        expression,
+        &term_position,
+        &first_number,
+        &first_letter
+    );
+
+    if (first_type == 0)
+    {
+        printf("Ошибка: первый член слишком большой\n");
+        return 0;
+    }
+
+    term_position++;
+
+    second_type = read_term(
+        expression,
+        &term_position,
+        &second_number,
+        &second_letter
+    );
+
+    if (second_type == 0)
+    {
+        printf("Ошибка: второй член слишком большой\n");
+        return 0;
+    }
+
+    if (!build_pascal_row(power, coefficients))
+    {
+        return 0;
+    }
+
+    if (!check_expansion(
+            power,
+            coefficients,
+            first_type,
+            second_type,
+            first_number,
+            second_number))
+    {
+        printf("Ошибка: переполнение при вычислении разложения\n");
+        return 0;
+    }
+
+    printf("\nТреугольник Паскаля:\n");
+
+    print_pascal_triangle(power);
+
+    printf("\n");
+
+    print_expansion(
+        power,
+        coefficients,
+        first_type,
+        second_type,
+        first_number,
+        second_number,
+        first_letter,
+        second_letter
+    );
 
     return 0;
 }
