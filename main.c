@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
+#define MAX_POWER 66
+
 int read_number(char expression[], int *position)
 {
     int number = 0;
@@ -12,6 +14,25 @@ int read_number(char expression[], int *position)
     }
 
     return number;
+}
+
+int read_term(char expression[], int *position,
+              long long *number, char *letter)
+{
+    if (isdigit(expression[*position]))
+    {
+        *number = read_number(expression, position);
+        return 1;
+    }
+
+    if (isalpha(expression[*position]))
+    {
+        *letter = expression[*position];
+        (*position)++;
+        return 2;
+    }
+
+    return 0;
 }
 
 int check_expression(char expression[], int *power)
@@ -42,7 +63,7 @@ int check_expression(char expression[], int *power)
 
     if (expression[position] != '+')
     {
-        printf("Ошибка: после первого члена должен быть '+'\n");
+        printf("Ошибка: первый член должен состоять из одного числа или одной буквы\n");
         return 0;
     }
 
@@ -64,7 +85,7 @@ int check_expression(char expression[], int *power)
 
     if (expression[position] != ')')
     {
-        printf("Ошибка: после второго члена должна быть ')'\n");
+        printf("Ошибка: второй член должен состоять из одного числа или одной буквы\n");
         return 0;
     }
 
@@ -85,6 +106,12 @@ int check_expression(char expression[], int *power)
     }
 
     *power = read_number(expression, &position);
+
+    if (*power > MAX_POWER)
+    {
+        printf("Ошибка: степень не должна быть больше %d\n", MAX_POWER);
+        return 0;
+    }
 
     if (expression[position] != '\0')
     {
@@ -118,6 +145,15 @@ int main(void)
     int power, row, position;
     char expression[100];
 
+    long long first_number = 0;
+    long long second_number = 0;
+
+    char first_letter = '\0';
+    char second_letter = '\0';
+
+    int first_type;
+    int second_type;
+
     printf("Введите выражение: ");
     scanf("%99s", expression);
 
@@ -126,8 +162,44 @@ int main(void)
         return 0;
     }
 
+    int term_position = 1;
+
+    first_type = read_term(
+        expression,
+        &term_position,
+        &first_number,
+        &first_letter
+    );
+
+    term_position++;
+
+    second_type = read_term(
+        expression,
+        &term_position,
+        &second_number,
+        &second_letter
+    );
+
     printf("Выражение прошло проверку\n");
     printf("Степень: %d\n", power);
+
+    if (first_type == 1)
+    {
+        printf("Первый член: %lld\n", first_number);
+    }
+    else
+    {
+        printf("Первый член: %c\n", first_letter);
+    }
+
+    if (second_type == 1)
+    {
+        printf("Второй член: %lld\n", second_number);
+    }
+    else
+    {
+        printf("Второй член: %c\n", second_letter);
+    }
 
     long long previous[67];
     long long current[67];
